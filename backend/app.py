@@ -82,7 +82,7 @@ def get_region_type(pincode):
 
     # print(json.loads(response))
 
-    return json.loads(response)
+    return json.loads(response)["type"]
 
 
 def calculate_age(dob_str):
@@ -110,11 +110,15 @@ def get_income_category(income):
     }
     return income_dict.get(income, "unknown_income")
 
+
 def determine_segment(user):
     age = calculate_age(user['dob'])
     income_category = get_income_category(user['income'])
     profession = user['profession']
     pincode = user['pincode']
+    region_type = get_region_type(pincode)
+
+    print(region_type)
     
     # Define segment rules
     if age < 30:
@@ -139,8 +143,6 @@ def determine_segment(user):
         else:
             return 'senior_professional'
     
-    if pincode == 530068:
-        return 'local_resident'
 
     return 'other_segment'
 
@@ -511,4 +513,4 @@ def chatbot():
         return {"error": str(e)}, 500
         
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0")
+    app.run(debug=True,host="0.0.0.0",port=8080)
