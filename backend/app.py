@@ -231,7 +231,7 @@ def get_push_notification_content(user_id, title, message):
 def generate_personalized_push_notification(user_schema, transaction_details):
     # Create the context for the prompt
     context = f"""
-    You are a marketing assistant for a bank. Generate a personalized 1 line push notification (make it catchy, quirky) content and a corresponding title (also should be eye catching and funny but smaller than the message content) for the user based on the given user schema and transaction details. The content should market the best bank cards service that the user can use to benefit from the transaction they have done. Add some cool icons also to make it look attractive.
+    You are a marketing assistant for a bank. Generate a personalized 1 line push notification related to transaction (make it catchy, quirky) content and a corresponding title (also should be eye catching and funny but smaller than the message content) for the user based on the given user schema and transaction details. The content should market the best bank cards service that the user can use to benefit from the transaction they have done. Make sure you only market the bank card service related to the transaction. Add some cool icons also to make it look attractive.
 
     User Schema:
     - Date of Birth: {user_schema['dob']}
@@ -382,7 +382,7 @@ def risk_appetite_and_suggestions():
         Please provide the content in the following JSON format:
         {{
             "subject": "subject of the mail",
-            "html_content": "html template of the mail content, use orange colour background as header with 'Bank of Baroda retirement plans', include the image URL provided by the user, add required headers and footers, and after best regards, add 'Bank Of Baroda, Website: https://www.bankofbaroda.in/'"
+            "html_content": "html template of the mail content, use orange colour background as header with 'Bank of Baroda retirement plans', include the image URL provided by the user below the header and content after that, add required headers and footers, and after best regards, add 'Bank Of Baroda, Website: https://www.bankofbaroda.in/'"
         }}
         """
         print("worked")
@@ -409,8 +409,9 @@ def risk_appetite_and_suggestions():
         return {"error": str(e)}, 500
 
 
-@app.route("/api/trigger-transaction", methods=["POST"])
+@app.route("/api/triggertransaction", methods=["POST"])
 def trigger_transaction():
+    print("In trigger api")
     try:
         transaction_ref = db.collection("transaction")
         user_ref = db.collection("user")
@@ -420,7 +421,7 @@ def trigger_transaction():
         # for transaction in transactions:
         #     transaction = transaction_ref.add(transaction)
         #     transaction = transaction[1].get().to_dict()
-        final_transaction = transactions[0]
+        final_transaction = transactions
         user = user_ref.document(
             final_transaction["user_id"],
         )
@@ -453,7 +454,7 @@ def trigger_transaction():
             return {"data": response}, 200
     except Exception as e:
         print(str(e))
-        return {"error": str(e)}, 500
+        return {"error\n\n\n\n": str(e)}, 500
 
 
 @app.route("/api/store-customer-activity", methods=["POST"])
@@ -470,6 +471,44 @@ def store_customer_activity():
         print(str(e))
         return {"error": str(e)}, 500
 
+@app.route("/api/chatbot", methods=["POST"])
+def chatbot():
+    try:
+        user_question = request.json.get("question", "")
+        if not user_question:
+            return {"error": "Question is required"}, 400
 
+        # Fetch the appropriate chunk from the database
+        context = """"""
+        results = client.search(search_text=user_question, top=3)
+
+        for doc in results:
+            context += "\n" + doc['data']
+        print("con" + context)
+
+        # Append the chunk and the question into prompt
+        qna_prompt_template = f"""You will be provided with the question and a related context, you need to answer the question using the context.
+            Context:
+            {context}
+
+            Question:
+            {user_question}
+
+            Make sure to answer the question only using the context provided, if the context doesn't contain the answer then return "I don't have enough information to answer the question".
+
+            Answer:"""
+
+        # Call LLM model to generate response
+        response = llm.invoke([
+            {"role": "system", "content": "You are a helpful assistant that provides information based on the given context."},
+            {"role": "user", "content": qna_prompt_template}
+        ])
+
+        return {"answer": response.content}, 200
+
+    except Exception as e:
+        print(str(e))
+        return {"error": str(e)}, 500
+        
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=True, host="0.0.0.0")
