@@ -5,8 +5,6 @@ import json
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
-import firebase
-import uuid
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import JSONLoader
@@ -17,6 +15,13 @@ from azure.search.documents import SearchClient
 import requests
 import numpy as np
 from datetime import datetime
+from flask import Flask, request, send_file
+from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
+import io
+from openai import AzureOpenAI
+from flask_mail import Mail, Message
+from twilio.rest import Client
+from twilio.twiml.voice_response import VoiceResponse
 
 load_dotenv()
 
@@ -49,8 +54,24 @@ llm = ChatOpenAI(
 )
 
 
+class Config:
+    MAIL_SERVER = 'smtp.gmail.com'
+    MAIL_PORT = 465
+    MAIL_USERNAME = os.getenv('MAIL_ID')
+    MAIL_PASSWORD = os.getenv('MAIL_PASSWORD')
+    MAIL_USE_TLS = False
+    MAIL_USE_SSL = True
+
+account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+twilio_client = Client(account_sid, auth_token)
+
 app = Flask(__name__)
 cors = CORS(app)
+app.config.from_object(Config())
+
+mail = Mail(app)
+
 
 cred = credentials.Certificate("./firebase-credentials.json")
 firebase_admin.initialize_app(cred)
@@ -58,9 +79,25 @@ firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 
+
 @app.route("/")
 def hello_world():
     return "Hello World"
+
+def send_personalized_email(mail,content,subject):
+    try:
+        msg = Message(
+            subject,
+            sender=(os.getenv('MAIL_SENDER'), os.getenv('SENDER_MAIL_ID')),
+            recipients=[os.getenv("RECEIVER_EMAIL")]
+        )
+        msg.html = content
+        mail.send(msg)
+        print('Email sent successfully')
+    except Exception as e:
+        print(f'Failed to send email: {e}')
+
+
 
 def get_region_type(pincode):
     prompt = f"""
@@ -343,7 +380,9 @@ def risk_appetite_and_suggestions():
 
         # Prepare context for the prompt
         context = f"""
-        You are a marketing assistant for a bank. Generate a personalized email marketing content for the user based on the given user data. The content should suggest bank-specific investment opportunities, services to optimize credit card usage, rewards, and benefits, and provide a customized retirement plan.
+        You are a marketing assistant for a bank. Generate a personalized email marketing content for the user based on the given user data. The content should suggest bank-specific investment opportunities, services to optimize credit card usage, rewards, and benefits, and provide a customized retirement plan. Demographics of the user is -
+        {curr_user}
+        Be sure to include the user's name in the mail content to make it sound more personalised.
 
         User Data:
         - Credit card spend in April: {user_data['credit_spend_apr']}
@@ -362,7 +401,7 @@ def risk_appetite_and_suggestions():
         - Image URL: {user_data['imgUrl']}
         - Total retirement savings needed: {total_retirement_savings_needed}
         """
-        print(context)
+        # print(context)
 
         # Perform a search query to get relevant bank services
         search_results = client.search(search_text="investment opportunities", top=5)
@@ -384,7 +423,7 @@ def risk_appetite_and_suggestions():
         Please provide the content in the following JSON format:
         {{
             "subject": "subject of the mail",
-            "html_content": "html template of the mail content, use orange colour background as header with 'Bank of Baroda retirement plans', include the image URL provided by the user below the header and content after that, add required headers and footers, and after best regards, add 'Bank Of Baroda, Website: https://www.bankofbaroda.in/'"
+            "html_content": "html template of the mail content, use orange colour background as header with 'Bank of Baroda retirement plans', include the image URL provided by the user below the header and content after that, add required headers and footers, and after best regards, add 'Bank Of Baroda, Website: https://www.bankofbaroda.in/'."
         }}
         """
         print("worked")
@@ -404,7 +443,10 @@ def risk_appetite_and_suggestions():
 
         email_content = json.loads(response)
 
-        return jsonify(email_content), 200
+        with app.app_context():
+            send_personalized_email(mail,email_content["html_content"],email_content["subject"])
+
+        return jsonify({"message":"Email sent successfully!"}), 200
 
     except Exception as e:
         print(str(e))
@@ -423,7 +465,7 @@ def trigger_transaction():
         # for transaction in transactions:
         #     transaction = transaction_ref.add(transaction)
         #     transaction = transaction[1].get().to_dict()
-        final_transaction = transactions
+        final_transaction = transactions[0]
         user = user_ref.document(
             final_transaction["user_id"],
         )
@@ -511,6 +553,176 @@ def chatbot():
     except Exception as e:
         print(str(e))
         return {"error": str(e)}, 500
+
+
+@app.route("/api/send-call", methods=["POST"])
+def send_call():
+    try:
+        data = request.json
+        user_id = data.get("user_id")
+        user_ref = db.collection("user")
+
+        curr_user = user_ref.document(user_id).get().to_dict()
+        base_prompt = "Get all the bank of baroda services and products that are made especially for the farmers of India. Make sure to includ the exact services with their proper names and schemes." if curr_user["profession"] == "farmer" else "Get all the bank of baroda services and products that are made especially for the defence personnels (both for retired or not) of India. Make sure to includ the exact services with their proper names and schemes."
+        # Fetch the appropriate chunk from the database
+        context = """"""
+        results = client.search(search_text=base_prompt, top=3)
+
+        for doc in results:
+            context += "\n" + doc['data']
+        print("con" + context)
+
+        # Append the chunk and the question into prompt
+        qna_prompt_template = f"""
+            You are a marketing assistant for a bank. Generate a personalized 4 to 5 lines content for the user based on the given user data. The content should suggest bank-specific plans, products and services. Demographics of the user is -
+            {curr_user}
+            Be sure to include the user's name in the call content to make it sound more personalised. Generate the content in hindi language only. Make sure to include the Bank of Baroda mention in the content to let the user know that the call is from bank of baroda.
+
+            Make sure to answer the question only using the context provided, if the context doesn't contain the answer then return "I don't have enough information to answer the question".
+
+            Answer:"""
+
+        # Call LLM model to generate response
+        response = llm.invoke([
+            {"role": "system", "content": "You are a helpful assistant that provides information based on the given context."},
+            {"role": "user", "content": qna_prompt_template}
+        ])
+
+        # print(response.content)
+
+        vresp = VoiceResponse()
+        vresp.say(response.content, language="hi-IN", voice="Polly.Aditi")
+
+        call = twilio_client.calls.create(
+            from_=os.getenv("TWILIO_NUMBER"),
+            to=os.getenv("RECEIVER_NUMBER"),
+            twiml=str(vresp)
+        )
+
+        return {"message": call.sid}, 200
+
+    except Exception as e:
+        print(str(e))
+        return {"error": str(e)}, 500
+    
+
+@app.route('/api/add-watermark', methods=['POST'])
+def add_watermark():
+    # Check if the request contains an image
+    if 'image' not in request.files:
+        return {"error": "No image file provided"}, 400
+    
+    # Get the image from the request
+    image_file = request.files['image']
+    image = Image.open(image_file).convert("RGBA")  # Ensure the image is in RGBA mode
+    
+    # Create watermark text with current year
+    current_year = datetime.now().year
+    watermark_text = f"© Bank of Baroda {current_year}"
+    draw = ImageDraw.Draw(image)
+    
+    # Load a larger TrueType font
+    font = ImageFont.truetype("arial.ttf", 36)  # Use a larger font size (36)
+    
+    # Calculate the position for the watermark (top right corner)
+    bbox = draw.textbbox((0, 0), watermark_text, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+    width, height = image.size
+    x = width - text_width - 10  # Margin from the right edge
+    y = 10  # Margin from the top edge
+    
+    # Create a transparent layer for the watermark
+    watermark_layer = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    watermark_draw = ImageDraw.Draw(watermark_layer)
+    
+    # Add the watermark text to the transparent layer with reduced transparency
+    watermark_draw.text((x, y), watermark_text, font=font, fill=(255, 255, 255))  # Light grey color with 20% transparency
+    
+    # Add logo image to the bottom left corner
+    if 'logo' in request.files:
+        logo_file = request.files['logo']
+        logo = Image.open(logo_file).convert("RGBA")
         
+        # Resize logo if necessary
+        logo_width, logo_height = logo.size
+        max_logo_size = min(width // 10, height // 10)  # Restrict logo to 20% of image dimensions
+        if logo_width > max_logo_size or logo_height > max_logo_size:
+            logo.thumbnail((max_logo_size, max_logo_size), Image.LANCZOS)
+        
+        # Position the logo
+        logo_x = 10  # Margin from the left edge
+        logo_y = height - logo.height - 10  # Margin from the bottom edge
+        
+        # Paste the logo onto the transparent layer
+        watermark_layer.paste(logo, (logo_x, logo_y), logo)
+    
+    # Composite the watermark and logo onto the original image
+    watermarked_image = Image.alpha_composite(image, watermark_layer)
+    
+    # Convert the image back to RGB mode before saving
+    watermarked_image = watermarked_image.convert("RGB")
+    
+    # Add metadata to the image
+    metadata = PngImagePlugin.PngInfo()
+    metadata.add_text("Title", "Bank of Baroda Watermarked Image")
+    metadata.add_text("Copyright", "Bank of Baroda | Copyright Reserved")
+    metadata.add_text("Creation Date", datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    
+    # Save the image to a BytesIO object with metadata
+    img_io = io.BytesIO()
+    watermarked_image.save(img_io, format='PNG', pnginfo=metadata)
+    img_io.seek(0)
+    
+    return send_file(img_io, mimetype='image/png')
+
+
+@app.route("/api/generate-image", methods=["POST"])
+def generate_image(user_id):
+    data = request.json
+
+    user_id = data.get("user_id")
+    user_ref = db.collection("user")
+    curr_user = user_ref.document(user_id).get().to_dict()
+    curr_age = calculate_age(curr_user["dob"])
+
+    prompt=""
+    size = data.get("size", "1024x1024")
+
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
+    
+    client = AzureOpenAI(
+        api_version="2024-05-01-preview",
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY")
+    )
+
+    result = client.images.generate(
+        model="Dalle3",
+        prompt="<the user's prompt>",
+        n=1
+    )
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
+
+    payload = {
+        "prompt": prompt,
+        "size": size,
+        "n": 1
+    }
+
+    response = requests.post(f"{AZURE_OPENAI_ENDPOINT}/v1/images/generations", json=payload, headers=headers)
+
+    if response.status_code != 200:
+        return jsonify({"error": "Failed to generate image", "details": response.json()}), response.status_code
+
+    image_data = response.json()
+    return jsonify(image_data)
+
+    
 if __name__ == "__main__":
     app.run(debug=True)
