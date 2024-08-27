@@ -362,7 +362,7 @@ def risk_appetite_and_suggestions():
         - Image URL: {user_data['imgUrl']}
         - Total retirement savings needed: {total_retirement_savings_needed}
         """
-        print("worked")
+        print(context)
 
         # Perform a search query to get relevant bank services
         search_results = client.search(search_text="investment opportunities", top=5)
@@ -513,4 +513,4 @@ def chatbot():
         return {"error": str(e)}, 500
         
 if __name__ == "__main__":
-    app.run(debug=True,host="0.0.0.0",port=8080)
+    app.run(debug=True)

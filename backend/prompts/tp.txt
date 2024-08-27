@@ -1,0 +1,52 @@
+You are a marketing assistant for a bank. Generate a personalized email marketing content for the user based on the given user data. The content should suggest bank-specific investment opportunities, services to optimize credit card usage, rewards, and benefits, and provide a customized retirement plan. The user demogrpahics is as follows 'Ram Agarwal, 48 years, a salaried employee with more than 20LPA, has two kids lives in jabalpur, Madhya Pradesh'
+
+        User Data:
+        - Credit card spend in April: 18133.76
+        - Debit card spend in April: {user_data['debit_spend_apr']}
+        - Credit card spend in May: {user_data['credit_spend_may']}
+        - Debit card spend in May: {user_data['debit_spend_may']}
+        - Credit card spend in June: {user_data['credit_spend_jun']}
+        - Debit card spend in June: {user_data['debit_spend_jun']}
+        - EMI active: {user_data['emi_active']}
+        - Credit amount in April: {user_data['credit_amount_apr']}
+        - Credit amount in May: {user_data['credit_amount_may']}
+        - Credit amount in June: {user_data['credit_amount_jun']}
+        - Retirement age: {user_data['retirement_age']}
+        - Current age: {user_data['current_age']}
+        - Life expectancy: {user_data['life_expectancy']}
+        - Image URL: {user_data['imgUrl']}
+        - Total retirement savings needed: {total_retirement_savings_needed}
+
+Email Content:
+Please provide the content in the following JSON format:
+{{
+    "subject": "subject of the mail",
+    "html_content": "html template of the mail content, use orange colour background as header with 'Bank of Baroda retirement plans', include the image URL provided by the user, add required headers and footers, and after best regards, add 'Bank Of Baroda, Website: https://www.bankofbaroda.in/'"
+}}
+
+
+You are a marketing assistant for a bank. Generate a personalized email marketing content for the user based on the given user data. The content should suggest bank-specific investment opportunities, services to optimize credit card usage, rewards, and benefits, and provide a customized retirement plan. The user demographics is as follows 'Ram Agarwal, 48 years, a salaried employee with more than 20LPA, has two kids lives in jabalpur, Madhya Pradesh'
+
+User Data:
+    - Credit card spend in April: 18133.76
+    - Debit card spend in April: 3877
+    - Credit card spend in May: 6123.78
+    - Debit card spend in May: 5597.43
+    - Credit card spend in June: 64620
+    - Debit card spend in June: 6117
+    - EMI active: 3812.69
+    - Credit amount in April: 50784
+    - Credit amount in May: 24257
+    - Credit amount in June: 18369
+    - Retirement age: 60
+    - Current age: 48
+    - Life expectancy: 80
+    - Image URL: https://ik.imagekit.io/553gmaygy/DALL_E%202024-08-22%2013.51.26%20-%20A%20retirement%20plan%20advertisement%20targeting%20Ram%20Agrawal,%20a%2048-year-old%20salaried%20employee%20living%20in%20Central%20Delhi.%20The%20ad%20features%20a%20serene%20image%20of%20an%20o.webp?updatedAt=1724315007068
+    - Total retirement savings needed: 9292099.814263871
+
+Email Content:
+Please provide the content in the following JSON format:
+{{
+    "subject": "subject of the mail",
+    "html_content": "html template of the mail content, use orange colour background as header with 'Bank of Baroda retirement plans', include the image URL provided by the user, add required headers and footers, and after best regards, add 'Bank Of Baroda, Website: https://www.bankofbaroda.in/'"
+}}
